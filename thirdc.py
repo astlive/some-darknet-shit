@@ -43,7 +43,7 @@ def main(config, args, tflag):
 	# gpx = gpshelper.generate_GPX(points, trk_name="gopro7-track")
 	# print(gpx)
 
-def getinfo(vpath):
+def getpoints(vpath):
 	import config
 	dcfg = argparse.Namespace(**{'binary':False, 'file':vpath, 'outputfile':vpath, 'skip':True, 'verbose':0})
 	config = config.setup_environment(dcfg)

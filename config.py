@@ -24,11 +24,9 @@ def setup_environment(args):
     """
     if platform.system().lower() == 'windows':
         # config = Config('C:\\Software\\ffmpeg\\bin\\ffmpeg.exe', 'C:\\Software\\ffmpeg\\bin\\ffprobe.exe')
-        config = Config('D:\\workspace\\ffmpeg-4.2-win64-static\\bin\\ffmpeg.exe', 'D:\\workspace\\ffmpeg-4.2-win64-static\\bin\\ffprobe.exe')
+        config = Config('D:\\workspace\\library\\ffmpeg-win64-static\\bin\\ffmpeg.exe', 'D:\\workspace\\library\\ffmpeg-win64-static\\bin\\ffprobe.exe')
     else:
         config = Config('/usr/bin/ffmpeg', '/usr/bin/ffprobe')
-
-
 
     # configure arguments
     config.verbose = args.verbose
