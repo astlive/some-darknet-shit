@@ -1,4 +1,5 @@
 #pip lib
+import sys
 import os
 import time
 import datetime
@@ -6,8 +7,9 @@ import logging
 import multiprocessing as mp
 
 #local module
+from darknet import Darknet
 from thirdc import getpoints
-import dbcc
+from dbcc import Dbcc
 
 class Server:
     def __init__(self, darknet, logger, dbcc):
@@ -32,7 +34,6 @@ class Server:
                     self.db.updatefilestatus(2, job['fid'])
                 
     def run(self):
-        # self.porter()
         mpPorter = mp.Process(target=self.porter)
         mpPorter.start()
 
@@ -52,26 +53,36 @@ def initlog():
     return logger
 
 def checker(logger, dbcc):
-    logger.info("checking darknet-detector")
-    logger.info("checking DB connecter") # Here to put your DB conn function
-    isconn = dbcc.chk_db()
-    if(isconn):
-        logger.info("Database Connected")
-    else:
-        logger.error("Database Connect Error")
-        return False
-    logger.info("checking GPX module")
-    points = getpoints(os.path.join(os.getcwd(), "test.mp4"))
-    if len(points)>0:
-        logger.info("GPX module Okay~")
-    else:
-        logger.error("GPX module failed")
-        return False
-    return True
-        
+    try:
+        logger.info("checking darknet-detector")
+        logger.info("checking DB connecter") # Here to put your DB conn function
+        isconn = dbcc.chk_db()
+        if(isconn):
+            logger.info("Database Connected")
+        else:
+            logger.error("Database Connect Error")
+            return False
+        logger.info("checking GPX module")
+        points = getpoints(os.path.join(os.getcwd(), "test.mp4"))
+        if len(points)>0:
+            logger.info("GPX module Okay~")
+        else:
+            logger.error("GPX module failed")
+            return False
+        return True
+    except:
+        type, message, traceback = sys.exc_info()
+        print('!!!--->error<---!!!')
+        print(type)
+        print(message)
+        print('function|module-->', traceback.tb_frame.f_code.co_name)
+        print('file-->', traceback.tb_frame.f_code.co_filename)
+        traceback = traceback.tb_next
+        print('!!!--->error-traceback-end<---!!!')
+    
 def main():
     logger = initlog()
-    db = dbcc.dbcc()
+    db = Dbcc()
     logger.info("init the tra detector server")
     if(checker(logger, db)):
         srv = Server("darknet", logger, db)
