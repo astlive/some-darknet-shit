@@ -1,5 +1,6 @@
 #pip lib
 import os
+import time
 import datetime
 import logging
 import multiprocessing as mp
@@ -16,18 +17,23 @@ class Server:
         self.jobs = mp.Queue()
     
     def porter(self):
-        sql = 'SELECT * FROM file WHERE file.status = 0'
-        rr = self.db.query(sql)
-        self.logger.info("Query the undetect record from DB num:" + str(len(rr)))
-        for r in rr:
-            self.logger.debug("r in rr-->" + str(r))
-            job = {'fid':r[0],'fpath':r[2]}
-            self.logger.debug("job-->" + str(job))
-            self.jobs.put(job)
-            
+        while True:
+            sql = 'SELECT * FROM file WHERE file.status = 0'
+            rr = self.db.query(sql)
+            self.logger.info("Query the undetect record from DB num:" + str(len(rr)))
+            if(len(rr) is 0):
+                time.sleep(10)
+            else:
+                for r in rr:
+                    self.logger.debug("r in rr-->" + str(r))
+                    job = {'fid':r[0],'fpath':r[2]}
+                    self.logger.debug("job-->" + str(job))
+                    self.jobs.put(job)
+                    self.db.updatefilestatus(2, job['fid'])
+                
     def run(self):
         # self.porter()
-        mpPorter = mp.Process(target=self.porter,args=(self,))
+        mpPorter = mp.Process(target=self.porter)
         mpPorter.start()
 
 def initlog():
