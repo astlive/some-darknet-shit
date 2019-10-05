@@ -26,6 +26,7 @@ class Server:
             self.jobs.put(job)
             
     def run(self):
+        # self.porter()
         mpPorter = mp.Process(target=self.porter,args=(self,))
         mpPorter.start()
 
