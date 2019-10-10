@@ -4,6 +4,8 @@ import os
 import time
 import datetime
 import logging
+import configparser
+from pathlib import Path
 import multiprocessing as mp
 
 #local module
@@ -29,9 +31,13 @@ class Server:
                 for r in rr:
                     self.logger.debug("r in rr-->" + str(r))
                     job = {'fid':r[0],'fpath':r[2]}
+                    if(Path(r[2]).suffix is 'mp4'):
+                        job['type'] = 0
+                    else:
+                        job['type'] = 1
                     self.logger.debug("job-->" + str(job))
                     self.jobs.put(job)
-                    self.db.updatefilestatus(2, job['fid'])
+                    # self.db.updatefilestatus(2, job['fid'])
                 
     def run(self):
         mpPorter = mp.Process(target=self.porter)
@@ -52,10 +58,36 @@ def initlog():
     logger.addHandler(fhlr)
     return logger
 
+def get_params(configfilepath):
+    """
+    getting parameter from config
+    """
+
+    config = configparser.ConfigParser()
+    config.read(configfilepath)
+
+    try:
+
+        # for YOLO
+        darknetlibfilepath = config.get('YOLO', 'darknetlibfilepath')
+        datafilepath = config.get('YOLO', 'datafilepath')
+        cfgfilepath = config.get('YOLO', 'cfgfilepath')
+        weightfilepath = config.get('YOLO', 'weightfilepath')
+
+        # for Server
+        host = config.get('Server', 'host')
+        port = config.getint('Server', 'port')
+        logfilepath = config.get('Server', 'logfilepath')
+        uploaddir = config.get('Server', 'uploaddir')
+        return darknetlibfilepath, datafilepath, cfgfilepath, \
+            weightfilepath, host, port, logfilepath, uploaddir
+    except configparser.Error as config_parse_err:
+        raise config_parse_err
+
 def checker(logger, dbcc):
     try:
         logger.info("checking darknet-detector")
-        logger.info("checking DB connecter") # Here to put your DB conn function
+        logger.info("checking DB connecter") # put your DB conn function
         isconn = dbcc.chk_db()
         if(isconn):
             logger.info("Database Connected")
@@ -72,13 +104,13 @@ def checker(logger, dbcc):
         return True
     except:
         type, message, traceback = sys.exc_info()
-        print('!!!--->error<---!!!')
-        print(type)
-        print(message)
-        print('function|module-->', traceback.tb_frame.f_code.co_name)
-        print('file-->', traceback.tb_frame.f_code.co_filename)
+        logger.error('!!!--->error<---!!!')
+        logger.error(type)
+        logger.error(message)
+        logger.error('function|module-->', traceback.tb_frame.f_code.co_name)
+        logger.error('file-->', traceback.tb_frame.f_code.co_filename)
         traceback = traceback.tb_next
-        print('!!!--->error-traceback-end<---!!!')
+        logger.error('!!!--->error-traceback-end<---!!!')
     
 def main():
     logger = initlog()
