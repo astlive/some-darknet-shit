@@ -22,8 +22,7 @@ class Server:
     
     def porter(self):
         while True:
-            sql = 'SELECT * FROM file WHERE file.status = 0'
-            rr = self.db.query(sql)
+            rr = self.db.get_job()
             self.logger.info("Query the undetect record from DB num:" + str(len(rr)))
             if(len(rr) is 0):
                 time.sleep(10)
@@ -38,7 +37,13 @@ class Server:
                     self.logger.debug("job-->" + str(job))
                     self.jobs.put(job)
                     # self.db.updatefilestatus(2, job['fid'])
-                
+    
+    def img_worker(self):
+        pass
+
+    def mp4_worker(self):
+        pass
+
     def run(self):
         mpPorter = mp.Process(target=self.porter)
         mpPorter.start()
@@ -62,46 +67,70 @@ def get_params(configfilepath):
     """
     getting parameter from config
     """
-
     config = configparser.ConfigParser()
     config.read(configfilepath)
 
     try:
+        # for Yolo
+        darknetlibfilepath = config.get('Yolo', 'darknetlibfilepath')
+        datafilepath = config.get('Yolo', 'datafilepath')
+        cfgfilepath = config.get('Yolo', 'cfgfilepath')
+        weightfilepath = config.get('Yolo', 'weightfilepath')
 
-        # for YOLO
-        darknetlibfilepath = config.get('YOLO', 'darknetlibfilepath')
-        datafilepath = config.get('YOLO', 'datafilepath')
-        cfgfilepath = config.get('YOLO', 'cfgfilepath')
-        weightfilepath = config.get('YOLO', 'weightfilepath')
+        yoloc = {'darknetlibfilepath':darknetlibfilepath,
+                'datafilepath':datafilepath, 'cfgfilepath':cfgfilepath,
+                'weightfilepath':weightfilepath}
 
         # for Server
-        host = config.get('Server', 'host')
-        port = config.getint('Server', 'port')
-        logfilepath = config.get('Server', 'logfilepath')
-        uploaddir = config.get('Server', 'uploaddir')
-        return darknetlibfilepath, datafilepath, cfgfilepath, \
-            weightfilepath, host, port, logfilepath, uploaddir
+        testvideo = config.get('Server', 'testvideo')
+
+        serverc = {'testvideo':testvideo}
+
+        # for Sql
+        autocommit = config.getboolean('Sql', 'autocommit')
+        host = config.get('Sql', 'host')
+        port = config.getint('Sql', 'port')
+        database = config.get('Sql', 'database')
+        user = config.get('Sql', 'user')
+        password = config.get('Sql', 'password')
+        charset = config.get('Sql', 'charset')
+
+        sqlc = {'autocommit':autocommit, 'host':host, 'port':port,
+                'database':database, 'user':user, 'password':password,
+                'charset':charset}
+
+        return yoloc, serverc, sqlc
     except configparser.Error as config_parse_err:
         raise config_parse_err
 
-def checker(logger, dbcc):
+def checker(logger, yolocfg, sqlc, serverc):
     try:
-        logger.info("checking darknet-detector")
+        logger.info("loading darknet-detector")
+        darknet = Darknet(libfilepath=yolocfg['darknetlibfilepath'],
+                      cfgfilepath=yolocfg['cfgfilepath'].encode(),
+                      weightsfilepath=yolocfg['weightfilepath'].encode(),
+                      datafilepath=yolocfg['datafilepath'].encode())
+        darknet.load_conf()
+
         logger.info("checking DB connecter") # put your DB conn function
-        isconn = dbcc.chk_db()
+        db = Dbcc(host=sqlc['host'], port=sqlc['port'], database=sqlc['database'],
+                  user=sqlc['user'], password=sqlc['password'])
+        isconn = db.chk_db()
         if(isconn):
             logger.info("Database Connected")
         else:
             logger.error("Database Connect Error")
             return False
+        
         logger.info("checking GPX module")
-        points = getpoints(os.path.join(os.getcwd(), "test.mp4"))
+        points = getpoints(serverc['testvideo'])
         if len(points)>0:
             logger.info("GPX module Okay~")
         else:
             logger.error("GPX module failed")
             return False
-        return True
+            
+        return True, darknet, db
     except:
         type, message, traceback = sys.exc_info()
         logger.error('!!!--->error<---!!!')
@@ -113,11 +142,16 @@ def checker(logger, dbcc):
         logger.error('!!!--->error-traceback-end<---!!!')
     
 def main():
+    servercfgpath = "./cfg/server.ini"
     logger = initlog()
-    db = Dbcc()
+    yoloc, serverc, sqlc = get_params(servercfgpath)
+    logger.debug(yoloc)
+    logger.debug(serverc)
+    logger.debug(sqlc)
     logger.info("init the tra detector server")
-    if(checker(logger, db)):
-        srv = Server("darknet", logger, db)
+    runflg, darknet, db = checker(logger, yoloc, sqlc, serverc)
+    if(runflg):
+        srv = Server(darknet, logger, db)
         logger.info("Server Start")
         srv.run()
 
