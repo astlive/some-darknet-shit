@@ -8,7 +8,6 @@ import configparser
 import numpy as np
 import io
 import cv2
-import gc
 from PIL import Image
 from pathlib import Path
 import multiprocessing as mp
@@ -62,14 +61,13 @@ class Server:
                     img = self.imgs.get(False)
                     if('endflag' in img and img['endflag'] == True):
                         self.logger.info("Fid:" + str(img['fid']) + " Job done")
-                        gc.collect()
+                        self.logger.debug("imgs-->qsize() " + str(self.imgs.qsize()))
                         #some code to mark the record is end at database
                     else:
                         #thresh --> 0.5
                         yolo_results = darknet.detect(img['img_data'], 0.5)
                         for yolo_result in yolo_results:
                             self.logger.debug(yolo_result.get_detect_result())
-                    
                 except Exception as err:
                     raise err
                 pass
