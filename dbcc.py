@@ -44,6 +44,8 @@ def main():
     if(todo is "1"):
         pass
     elif todo is "2":
+        fid = input()
+        db.updatefilestatus(0,fid)
         pass
     elif todo is "3":
         pass
