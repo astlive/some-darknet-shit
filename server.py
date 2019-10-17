@@ -8,6 +8,7 @@ import configparser
 import numpy as np
 import io
 import cv2
+import signal
 from PIL import Image
 from pathlib import Path
 import multiprocessing as mp
@@ -27,6 +28,7 @@ class Server:
         self.imgs = mp.Manager().Queue()
     
     def porter(self):
+        self.logger.debug("PID:" + str(os.getpid()) + " porter")
         while True:
             rr = self.db.get_job()
             self.logger.info("Query the undetect record from DB num:" + str(len(rr)))
@@ -45,7 +47,7 @@ class Server:
                     self.db.updatefilestatus(2, job['fid'])
     
     def darkneter(self):
-        self.logger.debug(str(os.getpid()) + " darkneter")
+        self.logger.debug("PID:" + str(os.getpid()) + " darkneter")
         self.logger.info("loading darknet-detector")
         darknet = Darknet(libfilepath=self.yoloc['darknetlibfilepath'],
                       cfgfilepath=self.yoloc['cfgfilepath'].encode(),
@@ -73,7 +75,7 @@ class Server:
                 pass
 
     def img_worker(self, fpath, fid):
-        self.logger.debug(str(os.getpid()) + " fid = " + str(fid)  + " img_worker target = " + str(fpath))
+        self.logger.debug("PID:" + str(os.getpid()) + " fid = " + str(fid)  + " img_worker target = " + str(fpath))
         try:
             with open(fpath, "rb") as inputfile:
                 img_data = inputfile.read()
@@ -82,10 +84,10 @@ class Server:
                 self.imgs.put(img)
         except Exception as err:
             raise err
-        pass
+        os.kill(os.getpid(), signal.SIGTERM)
 
     def video_worker(self, fpath, fid):
-        self.logger.debug(str(os.getpid()) + " fid = " + str(fid) +  " video_worker target = " + str(fpath))
+        self.logger.debug("PID:" + str(os.getpid()) + " fid = " + str(fid) +  " video_worker target = " + str(fpath))
         try:
             points = getpoints(fpath)
             if(len(points) > 0):
@@ -122,13 +124,16 @@ class Server:
                         self.logger.error("fid: " + str(fid) + " Read error at frame:" + str(i))
                 endflag = {'fid':fid,'endflag':True}
                 self.imgs.put(endflag)
+                vcap.release()
             else:
                 self.logger.error("GPS data Miss or not a gopro video " + fpath)
                 #some code to mark the record is not a valid GoPro video at database and exit process
         except Exception as err:
             raise err
+        os.kill(os.getpid(), signal.SIGTERM)
 
     def run(self):
+        self.logger.debug("PID:" + str(os.getpid()) + " Server Run")
         mpporter = mp.Process(target=self.porter)
         mpporter.start()
         mpdarknet = mp.Process(target=self.darkneter)
