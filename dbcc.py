@@ -15,7 +15,7 @@ class Dbcc:
 
     def get_job(self):
         with self._db.cursor() as cur:
-            sql = 'SELECT * FROM file WHERE file.status = 0'
+            sql = 'SELECT * FROM file WHERE file.status = 0 and file.justUpload = 0'
             cur.execute(sql)
             rr = cur.fetchall()
             return rr
@@ -32,11 +32,15 @@ class Dbcc:
             rr = cur.fetchall()
             return rr
     
-    def updatefilejustUpload(self, justUpload, fid):
+    def updatefilejustUpload(self, value, fid):
         with self._db.cursor() as cur:
-            cur.execute("UPDATE file SET file.justUpload = %s WHERE file.id = %s", (str(justUpload), str(fid)))
+            cur.execute("UPDATE file SET file.justUpload = %s WHERE file.id = %s", (str(value), str(fid)))
             rr = cur.fetchall()
             return rr
+
+    def insertresult(self, res):
+        with self._db.cursor() as cur:
+            pass
     
 def main():
     print("MySQL connect Test")

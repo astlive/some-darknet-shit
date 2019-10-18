@@ -26,6 +26,7 @@ class Server:
         self.up_folder = srvc['filepath']
         self.jobs = mp.Manager().Queue()
         self.imgs = mp.Manager().Queue()
+        self.pools = mp.Value('i', 0)
     
     def porter(self):
         self.logger.debug("PID:" + str(os.getpid()) + " porter")
@@ -44,7 +45,6 @@ class Server:
                         job['type'] = 1
                     self.logger.debug("job-->" + str(job))
                     self.jobs.put(job)
-                    self.db.updatefilestatus(2, job['fid'])
     
     def darkneter(self):
         self.logger.debug("PID:" + str(os.getpid()) + " darkneter")
@@ -71,11 +71,17 @@ class Server:
                         yolo_results = darknet.detect(img['img_data'], 0.5)
                         for yolo_result in yolo_results:
                             self.logger.debug(yolo_result.get_detect_result())
+                        d_img = cv2.cvtColor(img['img_data'], cv2.COLOR_RGB2BGR)
+                        d_img = darknet.draw_detections(d_img, yolo_results)
+                        cv2.imwrite(img['dimg_path'], d_img)
+                        
+                        self.db.updatefilestatus(img['status'], img['fid'])
                 except Exception as err:
                     raise err
 
     def img_worker(self, fpath, fid):
         self.logger.debug("PID:" + str(os.getpid()) + " fid = " + str(fid)  + " img_worker target = " + str(fpath))
+        self.db.updatefilestatus(0.000001, fid)
         try:
             with open(fpath, "rb") as inputfile:
                 img_data = inputfile.read()
@@ -115,11 +121,14 @@ class Server:
                     vcap.set(cv2.CAP_PROP_POS_FRAMES, i)
                     success, img = vcap.read()
                     if(success and img is not None):
-                        uimg = {'fid':fid,'img_data':img, 'point':curpoint}
+                        tmpp = os.path.join(ppath, (str(pcount) + "-" + str(i) + ".jpg"))
+                        tmpdp = os.path.join(ppath, (str(pcount) + "-" + str(i) + "d.jpg"))
+                        cv2.imwrite(tmpp, img)
+                        uimg = {'fid':fid,'img_data':img, 'lat':curpoint.latitude, 'lon':curpoint.longitude, 'speed':curpoint.speed,
+                        'UTCTIME':curpoint.time.strftime("%Y-%m-%d %H:%M:%S"), 'VIDEOTIME':(i/vframerate),
+                        'status':(i/totalframe), 'img_path':tmpp, 'dimg_path':tmpdp}
                         self.imgs.put(uimg)
                         self.logger.debug(uimg)
-                        tmpp = os.path.join(ppath, (str(pcount) + "-" + str(i) + ".jpg"))
-                        cv2.imwrite(tmpp, img)
                         self.logger.debug("fid:" + str(fid) + " imwrite to " + str(tmpp))
                     else:
                         self.logger.error("fid: " + str(fid) + " Read error at frame:" + str(i))
@@ -128,9 +137,11 @@ class Server:
                 vcap.release()
             else:
                 self.logger.error("GPS data Miss or not a gopro video " + fpath)
-                #some code to mark the record is not a valid GoPro video at database and exit process
+                #code to mark the file do not detect
+                self.db.updatefilejustUpload(1, fid)
         except Exception as err:
             raise err
+        self.pools = self.pools - 1
         os.kill(os.getpid(), signal.SIGTERM)
 
     def run(self):
@@ -141,13 +152,14 @@ class Server:
         mpdarknet.start()
 
         while True:
-            if self.jobs.empty():
+            if self.jobs.empty() or self.pools >= 5:
                 time.sleep(10)
             else:
                 job = self.jobs.get()
                 self.logger.debug(job)
                 jobfpath = os.path.join(self.up_folder,job['fpath'])
                 if(job['type'] == 0):
+                    self.pools = self.pools + 1
                     mp.Process(target=self.video_worker, args=(jobfpath,job['fid'],)).start()
                     self.logger.info("Video job " + str(jobfpath) + " Fid:" + str(job['fid']) + " Start")
                 elif(job['type'] == 1):
