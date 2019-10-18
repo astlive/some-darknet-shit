@@ -63,8 +63,9 @@ class Server:
                     img = self.imgs.get(False)
                     if('endflag' in img and img['endflag'] == True):
                         self.logger.info("Fid:" + str(img['fid']) + " Job done")
-                        self.logger.debug("imgs-->qsize() " + str(self.imgs.qsize()))
+                        # self.logger.debug("imgs-->qsize() " + str(self.imgs.qsize()))
                         #some code to mark the record is end at database
+                        self.db.updatefilestatus(1 ,img['fid'])
                     else:
                         #thresh --> 0.5
                         yolo_results = darknet.detect(img['img_data'], 0.5)
@@ -72,7 +73,6 @@ class Server:
                             self.logger.debug(yolo_result.get_detect_result())
                 except Exception as err:
                     raise err
-                pass
 
     def img_worker(self, fpath, fid):
         self.logger.debug("PID:" + str(os.getpid()) + " fid = " + str(fid)  + " img_worker target = " + str(fpath))
@@ -88,6 +88,7 @@ class Server:
 
     def video_worker(self, fpath, fid):
         self.logger.debug("PID:" + str(os.getpid()) + " fid = " + str(fid) +  " video_worker target = " + str(fpath))
+        self.db.updatefilejustUpload(0, fid)
         try:
             points = getpoints(fpath)
             if(len(points) > 0):

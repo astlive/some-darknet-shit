@@ -32,6 +32,12 @@ class Dbcc:
             rr = cur.fetchall()
             return rr
     
+    def updatefilejustUpload(self, justUpload, fid):
+        with self._db.cursor() as cur:
+            cur.execute("UPDATE file SET file.justUpload = %s WHERE file.id = %s", (str(justUpload), str(fid)))
+            rr = cur.fetchall()
+            return rr
+    
 def main():
     print("MySQL connect Test")
     db = Dbcc()
