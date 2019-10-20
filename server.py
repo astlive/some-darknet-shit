@@ -62,7 +62,6 @@ class Server:
                     img = self.imgs.get(False)
                     if('endflag' in img and img['endflag'] == True):
                         self.logger.info("Fid:" + str(img['fid']) + " Job done")
-                        # self.logger.debug("imgs-->qsize() " + str(self.imgs.qsize()))
                         #some code to mark the record is end at database
                         self.db.updatefilestatus(1 ,img['fid'])
                     else:
@@ -70,12 +69,14 @@ class Server:
                         yolo_results = darknet.detect(img['img_data'], 0.5)
                         # for yolo_result in yolo_results:
                         #     self.logger.debug(yolo_result.get_detect_result())
+                        self.logger.debug("darknet.detect --> " + img['img_path'] + " has " + str(len(yolo_results)) + " obj")
                         img['resultlist'] = [yolo_result.get_detect_result() for yolo_result in yolo_results]
                         d_img = cv2.cvtColor(img['img_data'], cv2.COLOR_RGB2BGR)
                         d_img = darknet.draw_detections(d_img, yolo_results)
                         cv2.imwrite(img['dimg_path'], d_img)
                         self.db.insertresult(img)
                         self.db.updatefilestatus(img['status'], img['fid'])
+                        self.logger.info("job --> " + str(img['fid']) + " status:" + str(img['status']))
                 except Exception as err:
                     raise err
 
@@ -96,6 +97,7 @@ class Server:
         self.db.updatefilejustUpload(0, fid)
         try:
             points = getpoints(fpath)
+            self.logger.info(str(fid) + " has " + str(len(points)) + " GPS point")
             if(len(points) > 0):
                 ppath = os.path.join(Path(fpath).parent,"video",os.path.basename(fpath))
                 for i in range(100):
@@ -128,11 +130,12 @@ class Server:
                         'status':(i/totalframe), 'img_path':tmpp, 'dimg_path':tmpdp, 'isframe':1}
                         self.imgs.put(uimg)
                         # self.logger.debug(uimg)
-                        self.logger.debug("fid:" + str(fid) + " imwrite to " + str(tmpp))
+                        self.logger.debug("fid:" + str(fid) + " save to " + str(tmpp))
                     else:
                         self.logger.error("fid: " + str(fid) + " Read error at frame:" + str(i))
                 endflag = {'fid':fid,'endflag':True}
                 self.imgs.put(endflag)
+                self.logger.debug(str(fid) + " endflag sended")
                 vcap.release()
             else:
                 self.logger.error("GPS data Miss or not a gopro video " + fpath)
@@ -150,8 +153,8 @@ class Server:
         mpporter.start()
         mpdarknet = mp.Process(target=self.darkneter)
         mpdarknet.start()
-        #to make sure darknet loaded
-        time.sleep(30)
+        #to make sure darknet loaded yolov3 weight on sn750 take about 10(s)
+        time.sleep(20)
 
         while True:
             self.logger.info("jobs:" + str(self.jobs.qsize()) + " imgs:" + str(self.imgs.qsize()) + " pools:" + str(self.pools.value))
@@ -159,7 +162,7 @@ class Server:
                 time.sleep(10)
             else:
                 job = self.jobs.get()
-                self.logger.debug(job)
+                self.logger.debug("job --> " + job)
                 jobfpath = os.path.join(self.up_folder,job['fpath'])
                 if(job['type'] == 0):
                     with self.pools.get_lock():
