@@ -1,4 +1,6 @@
-import pymysql 
+import pymysql
+import os
+from pathlib import Path
 
 class Dbcc:
     def __init__(self, host, port, database, user, password):
@@ -38,9 +40,28 @@ class Dbcc:
             rr = cur.fetchall()
             return rr
 
+    def hidepath(self, abspath):
+        return os.path.join(Path(abspath).parent.name, os.path.basename(abspath))
+
     def insertresult(self, res):
         with self._db.cursor() as cur:
-            pass
+            fid = res['fid']
+            image = self.hidepath(res['img_path'])
+            dimage = self.hidepath(res['dimg_path'])
+            lat = res['lat']
+            lon = res['lon']
+            time = res['UTCTIME']
+            speed = res['speed']
+            videotime = res['VIDEOTIME']
+            isframe = res['isframe']
+            for obj in res['resultlist']:
+                cur.execute(f"""INSERT INTO `result`(`fid`,`image`,`dimage`,`class_index`,
+                `obj_name`,`score`,`lat`,`lon`,`time`,`speed`,`videotime`,`isframe`) 
+                VALUES ('{fid}', '{image}', '{dimage}', '{obj['class_index']}', 
+                '{obj['obj_name']}', '{obj['score']}', '{lat}', '{lon}', 
+                '{time}', '{speed}', '{videotime}', '{isframe}')""")
+        rr = cur.fetchall()
+        return rr
     
 def main():
     print("MySQL connect Test")

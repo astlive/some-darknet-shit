@@ -29,10 +29,9 @@ class Server:
         self.pools = mp.Value('i', 0)
     
     def porter(self):
-        self.logger.debug("PID:" + str(os.getpid()) + " porter")
+        self.logger.info("PID:" + str(os.getpid()) + " porter start")
         while True:
             rr = self.db.get_job()
-            self.logger.info("Query the undetect record from DB num:" + str(len(rr)))
             if(len(rr) == 0):
                 time.sleep(10)
             else:
@@ -44,11 +43,11 @@ class Server:
                     else:
                         job['type'] = 1
                     self.logger.debug("job-->" + str(job))
+                    self.db.updatefilestatus(0.000001, job['fid'])
                     self.jobs.put(job)
     
     def darkneter(self):
-        self.logger.debug("PID:" + str(os.getpid()) + " darkneter")
-        self.logger.info("loading darknet-detector")
+        self.logger.info("PID:" + str(os.getpid()) + " loading darknet-detector")
         darknet = Darknet(libfilepath=self.yoloc['darknetlibfilepath'],
                       cfgfilepath=self.yoloc['cfgfilepath'].encode(),
                       weightsfilepath=self.yoloc['weightfilepath'].encode(),
@@ -69,31 +68,31 @@ class Server:
                     else:
                         #thresh --> 0.5
                         yolo_results = darknet.detect(img['img_data'], 0.5)
-                        for yolo_result in yolo_results:
-                            self.logger.debug(yolo_result.get_detect_result())
+                        # for yolo_result in yolo_results:
+                        #     self.logger.debug(yolo_result.get_detect_result())
+                        img['resultlist'] = [yolo_result.get_detect_result() for yolo_result in yolo_results]
                         d_img = cv2.cvtColor(img['img_data'], cv2.COLOR_RGB2BGR)
                         d_img = darknet.draw_detections(d_img, yolo_results)
                         cv2.imwrite(img['dimg_path'], d_img)
-                        
+                        self.db.insertresult(img)
                         self.db.updatefilestatus(img['status'], img['fid'])
                 except Exception as err:
                     raise err
 
     def img_worker(self, fpath, fid):
-        self.logger.debug("PID:" + str(os.getpid()) + " fid = " + str(fid)  + " img_worker target = " + str(fpath))
-        self.db.updatefilestatus(0.000001, fid)
+        self.logger.info("PID:" + str(os.getpid()) + " fid = " + str(fid)  + " img_worker target = " + str(fpath))
         try:
             with open(fpath, "rb") as inputfile:
                 img_data = inputfile.read()
                 img_np_arr = np.array(Image.open(io.BytesIO(img_data)).convert("RGB"))
-                img = {'fid':fid ,'img_data':img_np_arr, 'endflag':True}
+                img = {'fid':fid ,'img_data':img_np_arr, 'endflag':True, 'isframe':0}
                 self.imgs.put(img)
         except Exception as err:
             raise err
         os.kill(os.getpid(), signal.SIGTERM)
 
     def video_worker(self, fpath, fid):
-        self.logger.debug("PID:" + str(os.getpid()) + " fid = " + str(fid) +  " video_worker target = " + str(fpath))
+        self.logger.info("PID:" + str(os.getpid()) + " fid = " + str(fid) +  " video_worker target = " + str(fpath))
         self.db.updatefilejustUpload(0, fid)
         try:
             points = getpoints(fpath)
@@ -126,9 +125,9 @@ class Server:
                         cv2.imwrite(tmpp, img)
                         uimg = {'fid':fid,'img_data':img, 'lat':curpoint.latitude, 'lon':curpoint.longitude, 'speed':curpoint.speed,
                         'UTCTIME':curpoint.time.strftime("%Y-%m-%d %H:%M:%S"), 'VIDEOTIME':(i/vframerate),
-                        'status':(i/totalframe), 'img_path':tmpp, 'dimg_path':tmpdp}
+                        'status':(i/totalframe), 'img_path':tmpp, 'dimg_path':tmpdp, 'isframe':1}
                         self.imgs.put(uimg)
-                        self.logger.debug(uimg)
+                        # self.logger.debug(uimg)
                         self.logger.debug("fid:" + str(fid) + " imwrite to " + str(tmpp))
                     else:
                         self.logger.error("fid: " + str(fid) + " Read error at frame:" + str(i))
@@ -141,25 +140,30 @@ class Server:
                 self.db.updatefilejustUpload(1, fid)
         except Exception as err:
             raise err
-        self.pools = self.pools - 1
+        with(self.pools.get_lock()):
+            self.pools.value = self.pools.value - 1
         os.kill(os.getpid(), signal.SIGTERM)
 
     def run(self):
-        self.logger.debug("PID:" + str(os.getpid()) + " Server Run")
+        self.logger.info("PID:" + str(os.getpid()) + " Server Run")
         mpporter = mp.Process(target=self.porter)
         mpporter.start()
         mpdarknet = mp.Process(target=self.darkneter)
         mpdarknet.start()
+        #to make sure darknet loaded
+        time.sleep(30)
 
         while True:
-            if self.jobs.empty() or self.pools >= 5:
+            self.logger.info("jobs:" + str(self.jobs.qsize()) + " imgs:" + str(self.imgs.qsize()) + " pools:" + str(self.pools.value))
+            if self.jobs.empty() or self.pools.value >= 5:
                 time.sleep(10)
             else:
                 job = self.jobs.get()
                 self.logger.debug(job)
                 jobfpath = os.path.join(self.up_folder,job['fpath'])
                 if(job['type'] == 0):
-                    self.pools = self.pools + 1
+                    with self.pools.get_lock():
+                        self.pools.value = self.pools.value + 1
                     mp.Process(target=self.video_worker, args=(jobfpath,job['fid'],)).start()
                     self.logger.info("Video job " + str(jobfpath) + " Fid:" + str(job['fid']) + " Start")
                 elif(job['type'] == 1):
@@ -174,7 +178,7 @@ def initlog():
     formatter = logging.Formatter(log_format, date_format)
     verb = logging.StreamHandler()
     verb.setFormatter(formatter)
-    verb.setLevel('DEBUG')
+    verb.setLevel('INFO')
     logger.addHandler(verb)
     fhlr = logging.FileHandler(datetime.datetime.now().strftime("log/tk%Y-%m-%d_%H_%M_%S.log"))
     fhlr.setFormatter(formatter)
@@ -264,7 +268,7 @@ def main():
     runflg, db = checker(logger, sqlc, serverc)
     if(runflg):
         srv = Server(yoloc, logger, db, serverc)
-        logger.info("Server Start")
+        logger.debug("call Server Start")
         srv.run()
 
 if __name__ == '__main__':
