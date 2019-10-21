@@ -135,11 +135,11 @@ class Server:
                         darknet.copy_image_from_bytes(darknet_image,frame_resized.tobytes())
                         #thresh = 0.5
                         detections = darknet.detect_image(self.netMain, self.metaMain, darknet_image, thresh=0.5)
-                        
                         d_image, imcaption = self.cvDrawBoxes(detections, frame_resized)
+                        self.logger.debug("darknet.detect --> " + img['img_path'] + " has " + str(len(imcaption)) + " obj↑")
                         d_image = cv2.cvtColor(d_image, cv2.COLOR_BGR2RGB)
                         cv2.imwrite(img['dimg_path'], d_image)
-                        self.logger.debug("darknet.detect --> " + img['img_path'] + " has " + str(len(imcaption)) + " obj")
+                        self.logger.debug("darknet.detect save result image to --> " + img['dimg_path'])
                         img['resultlist'] = imcaption
                         self.db.insertresult(img)
                         self.db.updatefilestatus(img['status'], img['fid'])
