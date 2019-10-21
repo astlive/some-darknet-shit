@@ -14,13 +14,16 @@ from pathlib import Path
 import multiprocessing as mp
 
 #local module
-from darknet import Darknet
+import darknet
 from thirdc import getpoints
 from dbcc import Dbcc
 
 class Server:
     def __init__(self, yolocfg, logger, dbcc, srvc):
         self.yoloc = yolocfg
+        self.altNames = None
+        self.metaMain = None
+        self.netMain = None
         self.logger = logger
         self.db = dbcc
         self.up_folder = srvc['filepath']
@@ -46,14 +49,72 @@ class Server:
                     self.db.updatefilestatus(0.000001, job['fid'])
                     self.jobs.put(job)
     
+    def convertBack(self, x, y, w, h):
+        xmin = int(round(x - (w / 2)))
+        xmax = int(round(x + (w / 2)))
+        ymin = int(round(y - (h / 2)))
+        ymax = int(round(y + (h / 2)))
+        return xmin, ymin, xmax, ymax
+
+
+    def cvDrawBoxes(self, detections, img):
+        imcaption = []
+        for detection in detections:
+            x, y, w, h = detection[2][0],\
+                detection[2][1],\
+                detection[2][2],\
+                detection[2][3]
+            xmin, ymin, xmax, ymax = self.convertBack(
+                float(x), float(y), float(w), float(h))
+            pt1 = (xmin, ymin)
+            pt2 = (xmax, ymax)
+            cv2.rectangle(img, pt1, pt2, (0, 255, 0), 1)
+            cv2.putText(img,
+                        detection[0].decode() +
+                        " [" + str(round(detection[1] * 100, 2)) + "]",
+                        (pt1[0], pt1[1] - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                        [0, 255, 0], 2)
+            
+            #code for get obj label and score
+            label = detection[0].decode("ascii")
+            confidence = detection[1]
+            self.logger.debug(label+": "+str(np.rint(100 * confidence))+"%")
+            obj = {'class_index':detection[3], 'obj_name':label, 'score': confidence}
+            imcaption.append(obj)
+        return img, imcaption
+
     def darkneter(self):
         self.logger.info("PID:" + str(os.getpid()) + " loading darknet-detector")
-        darknet = Darknet(libfilepath=self.yoloc['darknetlibfilepath'],
-                      cfgfilepath=self.yoloc['cfgfilepath'].encode(),
-                      weightsfilepath=self.yoloc['weightfilepath'].encode(),
-                      datafilepath=self.yoloc['datafilepath'].encode())
-        darknet.load_conf()
+        
+        configPath = self.yoloc['cfgfilepath'].encode()
+        weightPath = self.yoloc['weightfilepath'].encode()
+        metaPath = self.yoloc['datafilepath'].encode()
+
+        self.netMain = darknet.load_net_custom(configPath, weightPath, 0, 1)  # batch size = 1
+        self.metaMain = darknet.load_meta(metaPath)
+        try:
+            with open(metaPath) as metaFH:
+                metaContents = metaFH.read()
+                import re
+                match = re.search("names *= *(.*)$", metaContents,
+                                re.IGNORECASE | re.MULTILINE)
+                if match:
+                    result = match.group(1)
+                else:
+                    result = None
+                try:
+                    if os.path.exists(result):
+                        with open(result) as namesFH:
+                            namesList = namesFH.read().strip().split("\n")
+                            self.altNames = [x.strip() for x in namesList]
+                except TypeError:
+                    pass
+        except Exception:
+            pass
+        darknet_image = darknet.make_image(darknet.network_width(self.netMain),
+                                    darknet.network_height(self.netMain),3)
         self.logger.info("....detector loading done.")
+
         while True:
             if(self.imgs.empty()):
                 time.sleep(10)
@@ -65,15 +126,20 @@ class Server:
                         #some code to mark the record is end at database
                         self.db.updatefilestatus(1 ,img['fid'])
                     else:
-                        #thresh --> 0.5
-                        yolo_results = darknet.detect(img['img_data'], 0.5)
-                        # for yolo_result in yolo_results:
-                        #     self.logger.debug(yolo_result.get_detect_result())
-                        self.logger.debug("darknet.detect --> " + img['img_path'] + " has " + str(len(yolo_results)) + " obj")
-                        img['resultlist'] = [yolo_result.get_detect_result() for yolo_result in yolo_results]
-                        d_img = cv2.cvtColor(img['img_data'], cv2.COLOR_RGB2BGR)
-                        d_img = darknet.draw_detections(d_img, yolo_results)
-                        cv2.imwrite(img['dimg_path'], d_img)
+                        CVmatimage = img['img_data']
+                        frame_rgb = cv2.cvtColor(CVmatimage, cv2.COLOR_BGR2RGB)
+                        frame_resized = cv2.resize(frame_rgb,
+                                                    (darknet.network_width(self.netMain),
+                                                    darknet.network_height(self.netMain)),
+                                                    interpolation=cv2.INTER_LINEAR)
+                        darknet.copy_image_from_bytes(darknet_image,frame_resized.tobytes())
+                        detections = darknet.detect_image(self.netMain, self.metaMain, darknet_image, thresh=0.25)
+                        
+                        d_image, imcaption = self.cvDrawBoxes(detections, frame_resized)
+                        d_image = cv2.cvtColor(d_image, cv2.COLOR_BGR2RGB)
+                        cv2.imwrite(img['dimg_path'], d_image)
+                        self.logger.debug("darknet.detect --> " + img['img_path'] + " has " + str(len(imcaption)) + " obj")
+                        img['resultlist'] = imcaption
                         self.db.insertresult(img)
                         self.db.updatefilestatus(img['status'], img['fid'])
                         self.logger.info("job --> " + str(img['fid']) + " status:" + str(img['status']))
@@ -197,13 +263,11 @@ def get_params(configfilepath):
 
     try:
         # for Yolo
-        darknetlibfilepath = config.get('Yolo', 'darknetlibfilepath')
         datafilepath = config.get('Yolo', 'datafilepath')
         cfgfilepath = config.get('Yolo', 'cfgfilepath')
         weightfilepath = config.get('Yolo', 'weightfilepath')
 
-        yoloc = {'darknetlibfilepath':darknetlibfilepath,
-                'datafilepath':datafilepath, 'cfgfilepath':cfgfilepath,
+        yoloc = {'datafilepath':datafilepath, 'cfgfilepath':cfgfilepath,
                 'weightfilepath':weightfilepath}
 
         # for Server
