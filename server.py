@@ -162,7 +162,7 @@ class Server:
                 time.sleep(10)
             else:
                 job = self.jobs.get()
-                self.logger.debug("job --> " + job)
+                self.logger.debug("job --> " + str(job))
                 jobfpath = os.path.join(self.up_folder,job['fpath'])
                 if(job['type'] == 0):
                     with self.pools.get_lock():

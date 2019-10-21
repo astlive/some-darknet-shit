@@ -45,23 +45,39 @@ class Dbcc:
 
     def insertresult(self, res):
         with self._db.cursor() as cur:
-            fid = res['fid']
-            image = self.hidepath(res['img_path'])
-            dimage = self.hidepath(res['dimg_path'])
-            lat = res['lat']
-            lon = res['lon']
-            time = res['UTCTIME']
-            speed = res['speed']
-            videotime = res['VIDEOTIME']
-            isframe = res['isframe']
-            for obj in res['resultlist']:
-                cur.execute(f"""INSERT INTO `result`(`fid`,`image`,`dimage`,`class_index`,
-                `obj_name`,`score`,`lat`,`lon`,`time`,`speed`,`videotime`,`isframe`) 
-                VALUES ('{fid}', '{image}', '{dimage}', '{obj['class_index']}', 
-                '{obj['obj_name']}', '{obj['score']}', '{lat}', '{lon}', 
-                '{time}', '{speed}', '{videotime}', '{isframe}')""")
-        rr = cur.fetchall()
-        return rr
+            try:
+                fid = res['fid']
+                image = self.hidepath(res['img_path'])
+                dimage = self.hidepath(res['dimg_path'])
+                lat = res['lat']
+                lon = res['lon']
+                time = res['UTCTIME']
+                speed = res['speed']
+                videotime = res['VIDEOTIME']
+                isframe = res['isframe']
+                for obj in res['resultlist']:
+                    cur.execute(f"""INSERT INTO `result`(`fid`,`image`,`dimage`,`class_index`,
+                    `obj_name`,`score`,`lat`,`lon`,`time`,`speed`,`videotime`,`isframe`) 
+                    VALUES ('{fid}', '{image}', '{dimage}', '{obj['class_index']}', 
+                    '{obj['obj_name']}', '{obj['score']}', '{lat}', '{lon}', 
+                    '{time}', '{speed}', '{videotime}', '{isframe}')""")
+            except Exception as err:
+                print("--->DB insertresult ERROR<---")
+                print("fid:" + str(fid))
+                print("image:" + str(image))
+                print("dimage:" + str(dimage))
+                print("lat:" + str(lat))
+                print("lon:" + str(lon))
+                print("time:" + str(time))
+                print("speed:" + str(speed))
+                print("videotime:" + str(videotime))
+                print("isframe:" + str(isframe))
+                print("obj in res -->")
+                for obj in res['resultlist']:
+                    print(obj)
+                print("--->Exception Message END<--")
+                raise err
+        return True
     
 def main():
     print("MySQL connect Test")
