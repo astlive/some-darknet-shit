@@ -133,7 +133,8 @@ class Server:
                                                     darknet.network_height(self.netMain)),
                                                     interpolation=cv2.INTER_LINEAR)
                         darknet.copy_image_from_bytes(darknet_image,frame_resized.tobytes())
-                        detections = darknet.detect_image(self.netMain, self.metaMain, darknet_image, thresh=0.25)
+                        #thresh = 0.5
+                        detections = darknet.detect_image(self.netMain, self.metaMain, darknet_image, thresh=0.5)
                         
                         d_image, imcaption = self.cvDrawBoxes(detections, frame_resized)
                         d_image = cv2.cvtColor(d_image, cv2.COLOR_BGR2RGB)
