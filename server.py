@@ -181,10 +181,9 @@ class Server:
                 curpoint = points[pcount]
                 self.logger.debug("fid: " + str(fid) + " totalframe:" + str(totalframe) + " vframerate:" + str(vframerate) + " vcaprate:" + str(vcaprate))
                 for i in range(0, totalframe, vcaprate):
-                    if(i % vcaprate == 0):
-                        if(i % (vcaprate*3) == 0 and i % (vcaprate*6) != 0 and i != 0 and pcount < len(points)-1):
-                            pcount = pcount + 1
-                            curpoint = points[pcount]
+                    if(i % (vcaprate*3) == 0 and i % (vcaprate*6) != 0 and i != 0 and pcount < len(points)-1):
+                        pcount = pcount + 1
+                        curpoint = points[pcount]
                     vcap.set(cv2.CAP_PROP_POS_FRAMES, i)
                     success, img = vcap.read()
                     if(success and img is not None):
