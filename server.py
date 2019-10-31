@@ -30,12 +30,22 @@ class Server:
         self.jobs = mp.Manager().Queue()
         self.imgs = mp.Manager().Queue()
         self.pools = mp.Value('i', 0)
+        signal.signal(signal.SIGINT, self.sig_handler)
+        signal.signal(signal.SIGTERM, self.sig_handler)
+
+    def sig_handler(self, signal_received, frame):
+        if(signal_received == signal.SIGINT):
+            self.logger.info("Received:ctrl + c Exit....")
+        elif(signal_received == signal.SIGTERM):
+            self.logger.info("Recevied:SIGTERM Exit....")
+        raise SystemExit
     
     def porter(self):
         self.logger.info("PID:" + str(os.getpid()) + " porter start")
         while True:
             rr = self.db.get_job()
             if(len(rr) == 0):
+                self.logger.debug("PID:" + str(os.getpid()) + " porter alive and waiting")
                 time.sleep(10)
             else:
                 for r in rr:
@@ -117,6 +127,7 @@ class Server:
 
         while True:
             if(self.imgs.empty()):
+                self.logger.debug("PID:" + str(os.getpid()) + " darknet-detector alive and waiting")
                 time.sleep(10)
             else:
                 try:
@@ -323,7 +334,7 @@ def checker(logger, sqlc, serverc):
         logger.error('file-->', traceback.tb_frame.f_code.co_filename)
         traceback = traceback.tb_next
         logger.error('!!!--->error-traceback-end<---!!!')
-    
+
 def main():
     servercfgpath = "./cfg/server.ini"
     logger = initlog()
