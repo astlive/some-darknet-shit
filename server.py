@@ -9,13 +9,16 @@ import numpy as np
 import io
 import cv2
 import signal
+import geopy
 from PIL import Image
 from pathlib import Path
+import glob
 import multiprocessing as mp
 
 #local module
 import darknet
 from thirdc import getpoints
+from thirdc import getkmpoints
 from dbcc import Dbcc
 
 class Server:
@@ -27,6 +30,7 @@ class Server:
         self.logger = logger
         self.db = dbcc
         self.up_folder = srvc['filepath']
+        self.kmpoints = getkmpoints(srvc['kmlpath'])
         self.jobs = mp.Manager().Queue()
         self.imgs = mp.Manager().Queue()
         self.pools = mp.Value('i', 0)
@@ -40,6 +44,19 @@ class Server:
             self.logger.info("Recevied:SIGTERM Exit....")
         raise SystemExit
     
+    def kmplus(self, targetpoint):
+        lpoint = self.kmpoints[0]
+        rpoint = self.kmpoints[1]
+        curdiff = geopy.distance.vincenty((lpoint['lat'],lpoint['lon']),(targetpoint['lat'],targetpoint['lon'])).km
+        nxtdiff = geopy.distance.vincenty((rpoint['lat'],rpoint['lon']),(targetpoint['lat'],targetpoint['lon'])).km
+        for i in range(1,len(self.kmpoints)):
+            if(curdiff>nxtdiff):
+                break
+            else:
+                lpoint = rpoint
+                rpoint = self.kmpoints[i]
+            pass
+
     def porter(self):
         self.logger.info("PID:" + str(os.getpid()) + " porter start")
         while True:
@@ -284,8 +301,8 @@ def get_params(configfilepath):
         # for Server
         testvideo = config.get('Server', 'testvideo')
         filepath = config.get('Server', 'filepath')
-
-        serverc = {'testvideo':testvideo, 'filepath':filepath}
+        kmlpath = config.get('Server', 'kmlpath')
+        serverc = {'testvideo':testvideo, 'filepath':filepath, 'kmlpath':kmlpath}
 
         # for Sql
         autocommit = config.getboolean('Sql', 'autocommit')
