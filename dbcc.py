@@ -51,15 +51,16 @@ class Dbcc:
                 dimage = self.hidepath(res['dimg_path'])
                 lat = res['lat']
                 lon = res['lon']
+                kplus = res['kmp']['name'].split('+')[0]+"+"+str(round(float(res['kmp']['name'].split('+')[1])+res['kmp']['meter'], 2))
                 time = res['UTCTIME']
                 speed = res['speed']
                 videotime = res['VIDEOTIME']
                 isframe = res['isframe']
                 for obj in res['resultlist']:
                     cur.execute(f"""INSERT INTO `result`(`fid`,`image`,`dimage`,`class_index`,
-                    `obj_name`,`score`,`lat`,`lon`,`time`,`speed`,`videotime`,`isframe`) 
+                    `obj_name`,`score`,`lat`,`lon`,`Kplus`,`time`,`speed`,`videotime`,`isframe`) 
                     VALUES ('{fid}', '{image}', '{dimage}', '{obj['class_index']}', 
-                    '{obj['obj_name']}', '{obj['score']}', '{lat}', '{lon}', 
+                    '{obj['obj_name']}', '{obj['score']}', '{lat}', '{lon}', '{kplus}',
                     '{time}', '{speed}', '{videotime}', '{isframe}')""")
             except Exception as err:
                 print("--->DB insertresult ERROR<---")
@@ -68,6 +69,7 @@ class Dbcc:
                 print("dimage:" + str(dimage))
                 print("lat:" + str(lat))
                 print("lon:" + str(lon))
+                print("kplus:" + str(kplus))
                 print("time:" + str(time))
                 print("speed:" + str(speed))
                 print("videotime:" + str(videotime))

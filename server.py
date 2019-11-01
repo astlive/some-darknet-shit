@@ -19,6 +19,7 @@ import multiprocessing as mp
 import darknet
 from thirdc import getpoints
 from thirdc import getkmpoints
+from thirdc import kmplush
 from dbcc import Dbcc
 
 class Server:
@@ -42,20 +43,7 @@ class Server:
             self.logger.info("Received:ctrl + c Exit....")
         elif(signal_received == signal.SIGTERM):
             self.logger.info("Recevied:SIGTERM Exit....")
-        raise SystemExit
-    
-    def kmplus(self, targetpoint):
-        lpoint = self.kmpoints[0]
-        rpoint = self.kmpoints[1]
-        curdiff = geopy.distance.vincenty((lpoint['lat'],lpoint['lon']),(targetpoint['lat'],targetpoint['lon'])).km
-        nxtdiff = geopy.distance.vincenty((rpoint['lat'],rpoint['lon']),(targetpoint['lat'],targetpoint['lon'])).km
-        for i in range(1,len(self.kmpoints)):
-            if(curdiff>nxtdiff):
-                break
-            else:
-                lpoint = rpoint
-                rpoint = self.kmpoints[i]
-            pass
+        raise SystemExit       
 
     def porter(self):
         self.logger.info("PID:" + str(os.getpid()) + " porter start")
@@ -219,11 +207,11 @@ class Server:
                         tmpp = os.path.join(ppath, (str(pcount) + "-" + str(i) + ".jpg"))
                         tmpdp = os.path.join(ppath, (str(pcount) + "-" + str(i) + "d.jpg"))
                         cv2.imwrite(tmpp, img)
-                        uimg = {'fid':fid,'img_data':img, 'lat':curpoint.latitude, 'lon':curpoint.longitude, 'speed':curpoint.speed,
+                        uimg = {'fid':fid,'img_data':img, 'lat':curpoint.latitude, 'lon':curpoint.longitude, 'kmp':kmplush(self.kmpoints,{'lat':curpoint.latitude,'lon':curpoint.longitude}), 'speed':curpoint.speed,
                         'UTCTIME':curpoint.time.strftime("%Y-%m-%d %H:%M:%S"), 'VIDEOTIME':(i/vframerate),
                         'status':(i/totalframe), 'img_path':tmpp, 'dimg_path':tmpdp, 'isframe':1}
                         self.imgs.put(uimg)
-                        # self.logger.debug(uimg)
+                        self.logger.debug(uimg)
                         self.logger.debug("fid:" + str(fid) + " save to " + str(tmpp))
                     else:
                         self.logger.error("fid: " + str(fid) + " Read error at frame:" + str(i))

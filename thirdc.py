@@ -92,12 +92,12 @@ def splitmp4withmpoint(lenpoints, vfile, ppath):
 def getkmpoints(kmldir="./cfg/kml/"):
     kmlfiles = glob.glob(kmldir + "*.kml")
     points = []
+    count = 0
     for kf in kmlfiles:
         print(kf)
         try:
             doc = etree.parse(kf)
             rr = doc.xpath('//kml:Placemark/kml:name/text()|//kml:Placemark/kml:Point/kml:coordinates/text()', namespaces={"kml":"http://www.opengis.net/kml/2.2"})
-            count = 0
             for i in range(0,len(rr),2):
                 name = rr[i]
                 x,y,z = str(rr[i+1]).split(',')
@@ -130,9 +130,10 @@ def kmplush(kmpoints, targetpoint):
             rpoint = kmpoints[i]
             curdiff = nxtdiff
             nxtdiff = geopy.distance.vincenty((rpoint['lat'],rpoint['lon']),(targetpoint['lat'],targetpoint['lon'])).km
-            print(lpoint['name'],"curdiff",curdiff,rpoint['name'],"nxtdiff",nxtdiff)
-    print("most close point at " + str(lpoint))
-    print("kmp:" + str(kmp))
+            # print(lpoint['name'],"curdiff",curdiff,rpoint['name'],"nxtdiff",nxtdiff)
+    # print("most close point at " + str(lpoint))
+    # print("kmp:" + str(kmp))
+    return kmp
 
 if __name__ == "__main__":
     # args = args_reciver()
@@ -143,6 +144,7 @@ if __name__ == "__main__":
     # 	main(config, defcfg, args.test)
     # else:
     # 	print(args.GPV + " does not exist or not a file")
-    point = {'lat':24.349269,'lon':120.630575}
+    # point = {'lat':24.349269,'lon':120.630575}
     # point = {'lat':24.349762,'lon':120.630906}
-    kmplush(getkmpoints(),point)
+    point = {'lat':24.346062,'lon':120.628410}
+    print(kmplush(getkmpoints(),point))
