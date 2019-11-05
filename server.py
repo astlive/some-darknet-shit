@@ -10,6 +10,7 @@ import io
 import cv2
 import signal
 import geopy
+from GPSPhoto import gpsphoto
 from PIL import Image
 from pathlib import Path
 import glob
@@ -158,19 +159,38 @@ class Server:
                         self.logger.debug("darknet.detect save result image to --> " + img['dimg_path'])
                         img['resultlist'] = imcaption
                         self.db.insertresult(img)
-                        self.db.updatefilestatus(img['status'], img['fid'])
-                        self.logger.info("job --> " + str(img['fid']) + " status:" + str(img['status']))
+                        if(img['isframe'] == 1):
+                            self.db.updatefilestatus(img['status'], img['fid'])
+                            self.logger.info("job --> " + str(img['fid']) + " status:" + str(img['status']))
                 except Exception as err:
                     raise err
 
     def img_worker(self, fpath, fid):
         self.logger.info("PID:" + str(os.getpid()) + " fid = " + str(fid)  + " img_worker target = " + str(fpath))
         try:
+            gpx = gpsphoto.getGPSData(fpath)
             with open(fpath, "rb") as inputfile:
+                dpath = os.path.join(Path(fpath).parent, "image", os.path.splitext(os.path.basename(fpath))[0] + "_d.jpg")
                 img_data = inputfile.read()
                 img_np_arr = np.array(Image.open(io.BytesIO(img_data)).convert("RGB"))
-                img = {'fid':fid ,'img_data':img_np_arr, 'endflag':True, 'isframe':0}
+                img = {'fid':fid, 'img_data':img_np_arr, 'img_path':fpath, 'dimg_path':dpath, 'speed':0, 'VIDEOTIME':0, 'isframe':0}
+                if(gpx != {}):
+                    self.logger.debug("img_worker fid:" + str(fid) + " Find GPS data...")
+                    img['lat'] = gpx['Latitude']
+                    img['lon'] = gpx['Longitude']
+                    img['kmp'] = kmplush(self.kmpoints, {'lat':gpx['Latitude'], 'lon':gpx['Longitude']})
+                    img['UTCTIME'] = datetime.datetime.strptime(gpx['Date'] + " " + gpx['UTC-Time'], '%m/%d/%Y %H:%M:%S')
+                else:
+                    self.logger.error("GPS data Miss " + fpath)
+                    img['lat'] = 23.470119
+                    img['lon'] = 120.957689
+                    img['kmp'] = {'name':"K0+0", 'meter':0}
+                    img['UTCTIME'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 self.imgs.put(img)
+                # self.logger.debug(img)
+                endflag = {'fid':fid, 'endflag':True}
+                self.imgs.put(endflag)
+                self.logger.debug(str(fid) + " endflag sended")
         except Exception as err:
             raise err
         os.kill(os.getpid(), signal.SIGTERM)
@@ -207,15 +227,16 @@ class Server:
                         tmpp = os.path.join(ppath, (str(pcount) + "-" + str(i) + ".jpg"))
                         tmpdp = os.path.join(ppath, (str(pcount) + "-" + str(i) + "d.jpg"))
                         cv2.imwrite(tmpp, img)
-                        uimg = {'fid':fid,'img_data':img, 'lat':curpoint.latitude, 'lon':curpoint.longitude, 'kmp':kmplush(self.kmpoints,{'lat':curpoint.latitude,'lon':curpoint.longitude}), 'speed':curpoint.speed,
+                        uimg = {'fid':fid, 'img_data':img, 'lat':curpoint.latitude, 'lon':curpoint.longitude, 'kmp':kmplush(self.kmpoints,
+                        {'lat':curpoint.latitude, 'lon':curpoint.longitude}), 'speed':curpoint.speed,
                         'UTCTIME':curpoint.time.strftime("%Y-%m-%d %H:%M:%S"), 'VIDEOTIME':(i/vframerate),
                         'status':(i/totalframe), 'img_path':tmpp, 'dimg_path':tmpdp, 'isframe':1}
                         self.imgs.put(uimg)
-                        self.logger.debug(uimg)
+                        # self.logger.debug(uimg)
                         self.logger.debug("fid:" + str(fid) + " save to " + str(tmpp))
                     else:
                         self.logger.error("fid: " + str(fid) + " Read error at frame:" + str(i))
-                endflag = {'fid':fid,'endflag':True}
+                endflag = {'fid':fid, 'endflag':True}
                 self.imgs.put(endflag)
                 self.logger.debug(str(fid) + " endflag sended")
                 vcap.release()

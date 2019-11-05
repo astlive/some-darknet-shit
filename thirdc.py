@@ -1,28 +1,15 @@
-from pathlib import Path
-import json
-import argparse
-import subprocess
-import re
-import struct
-import os
-import platform
-from collections import namedtuple
-import array
 import sys
+import os
+from pathlib import Path
+import argparse
 import glob
 from lxml import etree
-import time
-from datetime import datetime
 import cv2
 import geopy.distance
-
 import gopro2gpx
 import config
 import gpmf
 import fourCC
-import time
-import sys
-
 import gpshelper
 
 def args_reciver():
