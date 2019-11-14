@@ -1,0 +1,19 @@
+[Server]
+testvideo = ./test.mp4
+filepath = ./prj/upload/
+kmlpath = ./cfg/kml/
+
+[Yolo]
+datafilepath = ./prj/mymodel/obj.data
+cfgfilepath = ./prj/mymodel/yolov3.cfg
+weightfilepath = ./prj/mymodel/yolov3_best.weights
+
+[Sql]
+autocommit = True
+host = 127.0.0.1
+port = 3306
+database = database
+user = root
+password = root
+charset = utf8
+
