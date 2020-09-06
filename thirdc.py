@@ -101,7 +101,7 @@ def kmplush(kmpoints, targetpoint):
     rpoint = kmpoints[1]
     curdiff = geopy.distance.vincenty((lpoint['lat'],lpoint['lon']),(targetpoint['lat'],targetpoint['lon'])).km
     nxtdiff = geopy.distance.vincenty((rpoint['lat'],rpoint['lon']),(targetpoint['lat'],targetpoint['lon'])).km
-    kmp = {}
+    kmp = {'name':"K0+0", 'meter':0}
     for i in range(2,len(kmpoints)):
         if(curdiff<nxtdiff and curdiff<0.1):
             mdiff = geopy.distance.vincenty((lpoint['lat'],lpoint['lon']),(targetpoint['lat'],targetpoint['lon'])).km*1000
@@ -117,7 +117,7 @@ def kmplush(kmpoints, targetpoint):
             rpoint = kmpoints[i]
             curdiff = nxtdiff
             nxtdiff = geopy.distance.vincenty((rpoint['lat'],rpoint['lon']),(targetpoint['lat'],targetpoint['lon'])).km
-            # print(lpoint['name'],"curdiff",curdiff,rpoint['name'],"nxtdiff",nxtdiff)
+    #         print(lpoint['name'],"curdiff",curdiff,rpoint['name'],"nxtdiff",nxtdiff)
     # print("most close point at " + str(lpoint))
     # print("kmp:" + str(kmp))
     return kmp

@@ -27,8 +27,9 @@ class Server:
     def __init__(self, yolocfg, logger, dbcc, srvc):
         self.yoloc = yolocfg
         self.altNames = None
-        self.metaMain = None
-        self.netMain = None
+        self.network = None
+        self.class_names = None
+        self.class_colors = None
         self.logger = logger
         self.db = dbcc
         self.up_folder = srvc['filepath']
@@ -75,7 +76,16 @@ class Server:
 
     def cvDrawBoxes(self, detections, img):
         imcaption = []
+        green = [0, 255, 0]
+        red = [255, 0, 0]
         for detection in detections:
+            #code for get obj label and score
+            label = detection[0]
+            confidence = detection[1]
+            self.logger.debug(label+": "+str(np.rint(100 * confidence))+"%")
+            color = green
+            if("break" in label):
+                color = red
             x, y, w, h = detection[2][0],\
                 detection[2][1],\
                 detection[2][2],\
@@ -84,17 +94,13 @@ class Server:
                 float(x), float(y), float(w), float(h))
             pt1 = (xmin, ymin)
             pt2 = (xmax, ymax)
-            cv2.rectangle(img, pt1, pt2, (0, 255, 0), 1)
+            cv2.rectangle(img, pt1, pt2, color, 1)
             cv2.putText(img,
-                        detection[0].decode() +
+                        detection[0] +
                         " [" + str(round(detection[1] * 100, 2)) + "]",
                         (pt1[0], pt1[1] - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                        [0, 255, 0], 2)
+                        color, 2)
             
-            #code for get obj label and score
-            label = detection[0].decode("ascii")
-            confidence = detection[1]
-            self.logger.debug(label+": "+str(np.rint(100 * confidence))+"%")
             obj = {'class_index':detection[3], 'obj_name':label, 'score': confidence}
             imcaption.append(obj)
         return img, imcaption
@@ -102,12 +108,19 @@ class Server:
     def darkneter(self):
         self.logger.info("PID:" + str(os.getpid()) + " loading darknet-detector")
         
-        configPath = self.yoloc['cfgfilepath'].encode()
-        weightPath = self.yoloc['weightfilepath'].encode()
-        metaPath = self.yoloc['datafilepath'].encode()
+        configPath = self.yoloc['cfgfilepath']
+        weightPath = self.yoloc['weightfilepath']
+        metaPath = self.yoloc['datafilepath']
 
-        self.netMain = darknet.load_net_custom(configPath, weightPath, 0, 1)  # batch size = 1
-        self.metaMain = darknet.load_meta(metaPath)
+        # self.netMain = darknet.load_net_custom(configPath, weightPath, 0, 1)  # batch size = 1
+        # self.metaMain = darknet.load_meta(metaPath)
+
+        self.network, self.class_names, self.class_colors = darknet.load_network(
+            configPath,
+            metaPath,
+            weightPath,
+            batch_size=1
+        )
         try:
             with open(metaPath) as metaFH:
                 metaContents = metaFH.read()
@@ -127,8 +140,8 @@ class Server:
                     pass
         except Exception:
             pass
-        darknet_image = darknet.make_image(darknet.network_width(self.netMain),
-                                    darknet.network_height(self.netMain),3)
+        darknet_image = darknet.make_image(darknet.network_width(self.network),
+                                    darknet.network_height(self.network),3)
         self.logger.info("....detector loading done.")
 
         while True:
@@ -138,6 +151,7 @@ class Server:
             else:
                 try:
                     img = self.imgs.get(False)
+                    self.logger.debug("detector recived jobs from " + str(img['fid']))
                     if('endflag' in img and img['endflag'] == True):
                         self.logger.info("Fid:" + str(img['fid']) + " Job done")
                         #some code to mark the record is end at database
@@ -146,13 +160,14 @@ class Server:
                         CVmatimage = img['img_data']
                         frame_rgb = cv2.cvtColor(CVmatimage, cv2.COLOR_BGR2RGB)
                         frame_resized = cv2.resize(frame_rgb,
-                                                    (darknet.network_width(self.netMain),
-                                                    darknet.network_height(self.netMain)),
+                                                    (darknet.network_width(self.network),
+                                                    darknet.network_height(self.network)),
                                                     interpolation=cv2.INTER_LINEAR)
                         darknet.copy_image_from_bytes(darknet_image,frame_resized.tobytes())
                         #thresh = 0.5
-                        detections = darknet.detect_image(self.netMain, self.metaMain, darknet_image, thresh=0.5)
-                        d_image, imcaption = self.cvDrawBoxes(detections, frame_resized)
+                        detections = darknet.detect_image(self.network, self.class_names, darknet_image, thresh=0.5)
+                        # d_image, imcaption = self.cvDrawBoxes(detections, frame_resized)
+                        d_image, imcaption = darknet.draw_boxes(detections, frame_resized, self.class_colors)
                         self.logger.debug("darknet.detect --> " + img['img_path'] + " has " + str(len(imcaption)) + " obj↑")
                         d_image = cv2.cvtColor(d_image, cv2.COLOR_BGR2RGB)
                         cv2.imwrite(img['dimg_path'], d_image)
@@ -205,7 +220,7 @@ class Server:
                 ppath = os.path.join(Path(fpath).parent,"video",os.path.basename(fpath))
                 for i in range(100):
                     if(os.path.exists(ppath)):
-                        ppath = os.path.join(ppath,str(i))
+                        ppath = ppath + str(i)
                     else:
                         break
                 self.logger.debug("fid: " + str(fid) + " Create dir to put images at " + str(ppath))
@@ -232,7 +247,7 @@ class Server:
                         'UTCTIME':curpoint.time.strftime("%Y-%m-%d %H:%M:%S"), 'VIDEOTIME':(i/vframerate),
                         'status':(i/totalframe), 'img_path':tmpp, 'dimg_path':tmpdp, 'isframe':1}
                         self.imgs.put(uimg)
-                        # self.logger.debug(uimg)
+                        self.logger.debug(uimg)
                         self.logger.debug("fid:" + str(fid) + " save to " + str(tmpp))
                     else:
                         self.logger.error("fid: " + str(fid) + " Read error at frame:" + str(i))

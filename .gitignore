@@ -1,1 +1,4 @@
-server.ini
+__pycache__
+.vscode
+test.jpg
+test.mp4

@@ -69,7 +69,7 @@ class Dbcc:
                 print("dimage:" + str(dimage))
                 print("lat:" + str(lat))
                 print("lon:" + str(lon))
-                print("kplus:" + str(kplus))
+                print("kplus:" + str(res['kmp']))
                 print("time:" + str(time))
                 print("speed:" + str(speed))
                 print("videotime:" + str(videotime))

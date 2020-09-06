@@ -36,7 +36,7 @@ class FFMpegTools:
             Stream #0:2(eng): Data: none (tmcd / 0x64636D74), 0 kb/s (default)
             Stream #0:3(eng): Data: none (gpmd / 0x646D7067), 29 kb/s (default)
             Stream #0:4(eng): Data: none (fdsc / 0x63736466), 12 kb/s (default)
-        """      
+        """
         output = self.runCmd(self.config.ffprobe_cmd, [fname])
         # Stream #0:3(eng): Data: bin_data (gpmd / 0x646D7067), 29 kb/s (default)
         # Stream #0:2(eng): Data: none (gpmd / 0x646D7067), 29 kb/s (default)
